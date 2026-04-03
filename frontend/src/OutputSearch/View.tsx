@@ -1,12 +1,28 @@
+import { Link } from 'react-router';
+
 const View = () => {
 	return (
 		<>
-			<div className="container">
-				<h1>Output Search</h1>
-				<div>
-					Ini adalah output search dari dashboard jadi ketika user
-					melakukan pencarian, hasilnya akan ditampilkan di sini dari
-					berbagai platform menggunakan card
+			<div className="d-flex flex-column min-vh-100">
+				<div className="navbar bg-body-tertiary">
+					<div className="container-fluid d-flex justify-content-between align-items-center">
+						<Link
+							to="/"
+							className="navbar-brand d-flex gap-2 align-items-center"
+						>
+							<img src="/public/favicon.svg" alt="" width={20} />
+							Playnalyze
+						</Link>
+
+						<button className="btn btn-outline-primary">
+							<i className="fa fa-question me-1"></i>
+							FAQ
+						</button>
+					</div>
+				</div>
+
+				<div className="container flex-grow-1 d-flex flex-column align-items-center">
+					tetset
 				</div>
 			</div>
 		</>
