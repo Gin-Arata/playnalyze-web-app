@@ -107,4 +107,45 @@ def scrap_google_play(link: str):
 # request api steam
 @router.get("/scrap-steam")
 def scrap_steam(link: str):
-    print("test")
+    try:
+        # Extract appid from Steam link
+        # Format: https://store.steampowered.com/app/{appid} or similar
+        appid = link.split("/app/")[1].split("/")[0] if "/app/" in link else None
+        
+        if not appid:
+            return {"error": "Could not extract appid from link", "title": None, "comments": []}
+        
+        # Fetch game details
+        details_url = f"https://store.steampowered.com/api/appdetails?appids={appid}"
+        details_headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        
+        details_response = requests.get(details_url, headers=details_headers, timeout=10)
+        details_data = details_response.json()
+        
+        # Get game title
+        title = None
+        if appid in details_data and details_data[appid].get("success"):
+            title = details_data[appid]["data"].get("name", "Unknown")
+        
+        # Fetch reviews
+        reviews_url = f"https://store.steampowered.com/appreviews/{appid}?json=1&day_range=365&num_per_page=100"
+        reviews_response = requests.get(reviews_url, headers=details_headers, timeout=10)
+        reviews_data = reviews_response.json()
+        
+        # Extract comments from reviews
+        comments = []
+        if reviews_data.get("success"):
+            reviews_list = reviews_data.get("reviews", [])
+            comments = [review.get("review", "") for review in reviews_list if review.get("review")]
+        
+        return {
+            "title": title,
+            "comments": comments
+        }
+    
+    except Exception as e:
+        print(f"Error scraping Steam: {str(e)}")
+        return {"title": None, "comments": [], "error": str(e)}
+    
