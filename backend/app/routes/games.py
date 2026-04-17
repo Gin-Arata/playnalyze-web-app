@@ -1,4 +1,5 @@
 import requests
+import os
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from ..models.database import engine, Base
@@ -6,6 +7,7 @@ from ..models.items import Item
 from ..models.deps import get_db
 from bs4 import BeautifulSoup
 from google_play_scraper import reviews as playStoreReviews, Sort as playStoreSort
+from transformers import pipeline
 
 router = APIRouter(prefix="/items", tags=["items"])
 
@@ -15,6 +17,55 @@ Base.metadata.create_all(bind=engine)
 def get_items(db: Session = Depends(get_db)):
     items = db.query(Item).all()
     return items
+
+@router.get("/predict")
+def predict(link: str):
+    model_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../app/ai_models/steam_review_model")
+    )
+    # add sentiment model
+    sentiment_model = pipeline("text-classification", model=model_dir, tokenizer="distilbert-base-uncased", device=0)
+
+    # pipeline for summarization
+    summarization_pipeline = pipeline("summarization", model="facebook/bart-large-cnn", device=0)
+    
+    # if statement to check url and call the right scrapping function
+    if ("itch.io" in link):
+        comments = scrap_itchio(link)
+        return comments
+    elif ("play.google.com" in link):
+        comments = scrap_google_play(link)
+        return comments
+    elif ("store.steampowered.com" in link):
+        resultSteam = scrap_steam(link)
+        outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultSteam.get('comments')]
+        positiveReviews = [r for r, p in zip(resultSteam.get('comments'), outputSentiment) if p == "LABEL_1"]
+        negativeReviews = [r for r, p in zip(resultSteam.get('comments'), outputSentiment) if p == "LABEL_0"]
+        
+        # summarize 10 reviews per category
+        positiveTopTen = " ".join(positiveReviews[:10])
+        negativeTopTen = " ".join(negativeReviews[:10])
+        positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=400, min_length=100, do_sample=False)
+        negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=400, min_length=100, do_sample=False)
+        
+        return {
+            'title': resultSteam.get('title'),
+            'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
+            'positiveSummary': positiveSummary,
+            'negativeSummary': negativeSummary 
+        }
+    
+def predict_sentiment(text, sentiment_model):
+    words = text.split()
+    if len(words) > 512:
+        text = " ".join(words[:512])
+    
+    try:
+        result = sentiment_model(text, truncation=True, max_length=512)
+        return result[0]['label']
+    except Exception as e:
+        print(f"Error predicting: {str(e)[:50]}...")
+        return "LABEL_0"  # Default ke negative jika error
 
 # Scrapping itch.io
 @router.get("/scrap-itchio")
@@ -56,32 +107,4 @@ def scrap_google_play(link: str):
 # request api steam
 @router.get("/scrap-steam")
 def scrap_steam(link: str):
-    try:
-        app_id = link.split("/app/")[1].split("/")[0]
-    except(IndexError, ValueError):
-        return {"error": "Invalid Steam URL"}
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-    
-    urlReview = f"https://store.steampowered.com/appreviews/{app_id}?json=1&day_range=365&num_per_page=100"
-    urlTitle = f"https://store.steampowered.com/api/appdetails?appids={app_id}"
-    
-    try:
-        resReview = requests.get(urlReview, headers=headers)
-        resTitle = requests.get(urlTitle, headers=headers)
-        
-        reviewData = resReview.json()
-        titleData = resTitle.json()
-        
-        if not reviewData.get("success") or not titleData.get(app_id, {}).get("success"):
-            return {"error": "Failed to retrieve data from Steam API"}
-        else: 
-            reviews = reviewData.get("reviews", [])
-            title = titleData[app_id]["data"]["name"]
-            contents = [review['review'] for review in reviews]
-            
-            return {"title": title, "total_comments": len(contents), "comments": contents}
-    except requests.RequestException as e:
-        return {"error": f"An error occurred while making the request: {str(e)}"}
+    print("test")
