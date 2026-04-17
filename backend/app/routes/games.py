@@ -18,7 +18,7 @@ def get_items(db: Session = Depends(get_db)):
 
 # Scrapping itch.io
 @router.get("/scrap-itchio")
-def scrap_test(link: str):
+def scrap_itchio(link: str):
     url = link
     headers = {
         "User-Agent": "Mozilla/5.0"
@@ -56,4 +56,32 @@ def scrap_google_play(link: str):
 # request api steam
 @router.get("/scrap-steam")
 def scrap_steam(link: str):
-    print("test")
+    try:
+        app_id = link.split("/app/")[1].split("/")[0]
+    except(IndexError, ValueError):
+        return {"error": "Invalid Steam URL"}
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+    
+    urlReview = f"https://store.steampowered.com/appreviews/{app_id}?json=1&day_range=365&num_per_page=100"
+    urlTitle = f"https://store.steampowered.com/api/appdetails?appids={app_id}"
+    
+    try:
+        resReview = requests.get(urlReview, headers=headers)
+        resTitle = requests.get(urlTitle, headers=headers)
+        
+        reviewData = resReview.json()
+        titleData = resTitle.json()
+        
+        if not reviewData.get("success") or not titleData.get(app_id, {}).get("success"):
+            return {"error": "Failed to retrieve data from Steam API"}
+        else: 
+            reviews = reviewData.get("reviews", [])
+            title = titleData[app_id]["data"]["name"]
+            contents = [review['review'] for review in reviews]
+            
+            return {"title": title, "total_comments": len(contents), "comments": contents}
+    except requests.RequestException as e:
+        return {"error": f"An error occurred while making the request: {str(e)}"}

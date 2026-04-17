@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .items import router as items_router
+from .games import router as items_router
 
 routes = FastAPI()
 
