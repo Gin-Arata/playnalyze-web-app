@@ -6,7 +6,7 @@ from ..models.database import engine, Base
 from ..models.items import Item
 from ..models.deps import get_db
 from bs4 import BeautifulSoup
-from google_play_scraper import reviews as playStoreReviews, Sort as playStoreSort
+from google_play_scraper import app as playStoreAppDetail, reviews as playStoreReviews, Sort as playStoreSort
 from transformers import pipeline
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -34,8 +34,23 @@ def predict(link: str):
         comments = scrap_itchio(link)
         return comments
     elif ("play.google.com" in link):
-        comments = scrap_google_play(link)
-        return comments
+        resultPlayStore = scrap_google_play(link)
+        outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultPlayStore.get('comments')]
+        positiveReviews = [r for r, p in zip(resultPlayStore.get('comments'), outputSentiment) if p == "LABEL_1"]
+        negativeReviews = [r for r, p in zip(resultPlayStore.get('comments'), outputSentiment) if p == "LABEL_0"]
+        
+        # summarize 10 reviews per category
+        positiveTopTen = " ".join(positiveReviews[:10])
+        negativeTopTen = " ".join(negativeReviews[:10])
+        positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=400, min_length=100, do_sample=False)
+        negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=400, min_length=100, do_sample=False)
+        
+        return {
+            'title': resultPlayStore.get('title'),
+            'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
+            'positiveSummary': positiveSummary,
+            'negativeSummary': negativeSummary
+        }
     elif ("store.steampowered.com" in link):
         resultSteam = scrap_steam(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultSteam.get('comments')]
@@ -76,12 +91,13 @@ def scrap_itchio(link: str):
     }
     res = requests.get(url, headers=headers)
     soup = BeautifulSoup(res.text, "html.parser")
+    gameTitle = soup.find("h1", class_="game_title").text.strip()
     commentsPage1 = soup.find_all("div", class_="post_body")
     
     totalComments = soup.find("nobr")
     
     if (not totalComments):
-        return {"total_comments": len(commentsPage1), "comments": [c.text.strip() for c in commentsPage1]}
+        return {"title": gameTitle, "comments": [c.text.strip() for c in commentsPage1]}
     else:
         textTotalComments = totalComments.text.strip()
         partsTotalComments = textTotalComments.split(" ")
@@ -92,17 +108,18 @@ def scrap_itchio(link: str):
         commentsPage2 = soup.find_all("div", class_="post_body")
         
         allComments = commentsPage1 + commentsPage2
-        return {"total_comments": total, "comments": [c.text.strip() for c in allComments]}
+        return {"title": gameTitle, "comments": [c.text.strip() for c in allComments]}
     
 # Scrapping Google Play
 @router.get("/scrap-google-play")
 def scrap_google_play(link: str):
     app_id = link.split("id=")[1]
-    result, token = playStoreReviews(app_id=app_id, lang="en", country="us", sort=playStoreSort.NEWEST, count=100)
+    resultReview, token = playStoreReviews(app_id=app_id, lang="en", country="us", sort=playStoreSort.NEWEST, count=100)
+    resultApp = playStoreAppDetail(app_id=app_id, lang="en", country="us")
     
-    contents = [review['content'] for review in result]
+    contents = [review['content'] for review in resultReview]
     
-    return {"total_comments": len(contents), "comments": contents}
+    return {'title': resultApp.get('title'), 'comments': contents}
 
 # request api steam
 @router.get("/scrap-steam")
