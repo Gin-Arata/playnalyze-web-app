@@ -31,8 +31,23 @@ def predict(link: str):
     
     # if statement to check url and call the right scrapping function
     if ("itch.io" in link):
-        comments = scrap_itchio(link)
-        return comments
+        resultItchio = scrap_itchio(link)
+        outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultItchio.get('comments')]
+        positiveReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_1"]
+        negativeReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_0"]
+        
+        # summarize 10 reviews per category
+        positiveTopTen = " ".join(positiveReviews[:10])
+        negativeTopTen = " ".join(negativeReviews[:10])
+        positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=100, min_length=10, do_sample=False)
+        negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=100, min_length=10, do_sample=False)
+        
+        return {
+            'title': resultItchio.get('title'),
+            'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
+            'positiveSummary': positiveSummary,
+            'negativeSummary': negativeSummary
+        }
     elif ("play.google.com" in link):
         resultPlayStore = scrap_google_play(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultPlayStore.get('comments')]
