@@ -1,3 +1,4 @@
+import React from 'react';
 import type { GameDataResponse } from '../types/game';
 import './index.css';
 
@@ -5,13 +6,13 @@ const View = ({
 	submitGameSearch,
 	data,
 	isLoading,
+	searchText,
 }: {
 	submitGameSearch: (e: React.FormEvent<HTMLFormElement>) => void;
 	data: GameDataResponse;
 	isLoading: boolean;
+	searchText?: string;
 }) => {
-	console.log(data);
-
 	return (
 		<div className="d-flex flex-column min-vh-100">
 			<div className="navbar" style={{ backgroundColor: '#60A5FA' }}>
@@ -65,6 +66,7 @@ const View = ({
 									name="search"
 									className="form-control pe-5"
 									placeholder="Input your URL here"
+									defaultValue={searchText}
 								/>
 							</form>
 							<i className="fa fa-search position-absolute end-0 top-50 translate-middle-y me-3 fs-6 text-muted" />

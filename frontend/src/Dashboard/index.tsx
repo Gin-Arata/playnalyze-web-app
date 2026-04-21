@@ -12,12 +12,13 @@ const Index = () => {
 		const searchQuery = formData.get('search') as string;
 		setSearchQuery(searchQuery);
 	};
-    
+
 	return (
 		<View
 			submitGameSearch={submitGameSearch}
 			data={data}
 			isLoading={isLoading}
+            searchText={searchQuery || undefined}
 		/>
 	);
 };
