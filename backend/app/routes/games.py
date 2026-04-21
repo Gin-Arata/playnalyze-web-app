@@ -51,9 +51,11 @@ def search(link: str, db: Session = Depends(get_db)):
         
         return {
             'title': resultItchio.get('title'),
+            'description': "From Itch.io",
             'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
             'positiveSummary': positiveSummary,
-            'negativeSummary': negativeSummary
+            'negativeSummary': negativeSummary,
+            'fromPlatform': 1
         }
     elif ("play.google.com" in link and "https://" in link):
         resultPlayStore = scrap_google_play(link)
@@ -74,9 +76,11 @@ def search(link: str, db: Session = Depends(get_db)):
         
         return {
             'title': resultPlayStore.get('title'),
+            'description': "From Google Play",
             'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
             'positiveSummary': positiveSummary,
-            'negativeSummary': negativeSummary
+            'negativeSummary': negativeSummary,
+            'fromPlatform': 2
         }
     elif ("store.steampowered.com" in link and "https://" in link):
         resultSteam = scrap_steam(link)
@@ -97,9 +101,11 @@ def search(link: str, db: Session = Depends(get_db)):
         
         return {
             'title': resultSteam.get('title'),
-            'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
-            'positiveSummary': positiveSummary,
-            'negativeSummary': negativeSummary 
+            'description': "From Steam",
+            'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
+            'summary_positive': positiveSummary,
+            'summary_negative': negativeSummary,
+            'from_platform': 3
         }
     else:
         games = db.query(Game).filter(Game.name.ilike(f"%{link}%")).all()
