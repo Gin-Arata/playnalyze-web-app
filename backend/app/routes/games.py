@@ -3,23 +3,23 @@ import os
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from ..models.database import engine, Base
-from ..models.items import Item
+from ..models.games import Game
 from ..models.deps import get_db
 from bs4 import BeautifulSoup
 from google_play_scraper import app as playStoreAppDetail, reviews as playStoreReviews, Sort as playStoreSort
 from transformers import pipeline
 
-router = APIRouter(prefix="/items", tags=["items"])
+router = APIRouter(prefix="/games", tags=["games"])
 
 Base.metadata.create_all(bind=engine)
 
 @router.get("/")
-def get_items(db: Session = Depends(get_db)):
-    items = db.query(Item).all()
-    return items
+def get_all_games(db: Session = Depends(get_db)):
+    games = db.query(Game).all()
+    return games
 
-@router.get("/predict")
-def predict(link: str):
+@router.get("/search")
+def search(link: str, db: Session = Depends(get_db)):
     model_dir = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "../../app/ai_models/steam_review_model")
     )
@@ -30,7 +30,7 @@ def predict(link: str):
     summarization_pipeline = pipeline("summarization", model="facebook/bart-large-cnn", device=0)
     
     # if statement to check url and call the right scrapping function
-    if ("itch.io" in link):
+    if ("itch.io" in link and "https://" in link):
         resultItchio = scrap_itchio(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultItchio.get('comments')]
         positiveReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_1"]
@@ -42,13 +42,18 @@ def predict(link: str):
         positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=100, min_length=10, do_sample=False)
         negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=100, min_length=10, do_sample=False)
         
+        new_game = Game(name=resultItchio.get('title'), description="From Itch.io", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=1)
+        db.add(new_game)
+        db.commit()
+        db.refresh(new_game)
+        
         return {
             'title': resultItchio.get('title'),
             'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
             'positiveSummary': positiveSummary,
             'negativeSummary': negativeSummary
         }
-    elif ("play.google.com" in link):
+    elif ("play.google.com" in link and "https://" in link):
         resultPlayStore = scrap_google_play(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultPlayStore.get('comments')]
         positiveReviews = [r for r, p in zip(resultPlayStore.get('comments'), outputSentiment) if p == "LABEL_1"]
@@ -60,13 +65,18 @@ def predict(link: str):
         positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=400, min_length=100, do_sample=False)
         negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=400, min_length=100, do_sample=False)
         
+        new_game = Game(name=resultPlayStore.get('title'), description="From Google Play", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=2)
+        db.add(new_game)
+        db.commit()
+        db.refresh(new_game)
+        
         return {
             'title': resultPlayStore.get('title'),
             'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
             'positiveSummary': positiveSummary,
             'negativeSummary': negativeSummary
         }
-    elif ("store.steampowered.com" in link):
+    elif ("store.steampowered.com" in link and "https://" in link):
         resultSteam = scrap_steam(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultSteam.get('comments')]
         positiveReviews = [r for r, p in zip(resultSteam.get('comments'), outputSentiment) if p == "LABEL_1"]
@@ -78,12 +88,20 @@ def predict(link: str):
         positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=400, min_length=100, do_sample=False)
         negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=400, min_length=100, do_sample=False)
         
+        new_game = Game(name=resultSteam.get('title'), description="From Steam", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=3)
+        db.add(new_game)
+        db.commit()
+        db.refresh(new_game)
+        
         return {
             'title': resultSteam.get('title'),
             'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
             'positiveSummary': positiveSummary,
             'negativeSummary': negativeSummary 
         }
+    else:
+        games = db.query(Game).filter(Game.name.ilike(f"%{link}%")).all()
+        return games
     
 def predict_sentiment(text, sentiment_model):
     words = text.split()
@@ -98,7 +116,6 @@ def predict_sentiment(text, sentiment_model):
         return "LABEL_0"  # Default ke negative jika error
 
 # Scrapping itch.io
-@router.get("/scrap-itchio")
 def scrap_itchio(link: str):
     url = link
     headers = {
@@ -126,7 +143,6 @@ def scrap_itchio(link: str):
         return {"title": gameTitle, "comments": [c.text.strip() for c in allComments]}
     
 # Scrapping Google Play
-@router.get("/scrap-google-play")
 def scrap_google_play(link: str):
     app_id = link.split("id=")[1]
     resultReview, token = playStoreReviews(app_id=app_id, lang="en", country="us", sort=playStoreSort.NEWEST, count=100)
@@ -137,7 +153,6 @@ def scrap_google_play(link: str):
     return {'title': resultApp.get('title'), 'comments': contents}
 
 # request api steam
-@router.get("/scrap-steam")
 def scrap_steam(link: str):
     try:
         # Extract appid from Steam link
