@@ -98,7 +98,7 @@ const View = ({
 													style={{ height: '200px' }}
 												>
 													<img
-														src="/public/icons.svg"
+														src={game.img_url}
 														className="card-img-left"
 														alt={game.name}
 														style={{
