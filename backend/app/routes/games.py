@@ -82,14 +82,15 @@ def search(link: str, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(new_game)
         
-        return {
-            'title': resultItchio.get('title'),
+        return [{
+            'game_id': 1,
+            'name': resultItchio.get('title'),
             'description': "From Itch.io",
-            'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
-            'positiveSummary': positiveSummary,
-            'negativeSummary': negativeSummary,
-            'fromPlatform': 1
-        }
+            'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
+            'summary_positive': positiveSummary,
+            'summary_negative': negativeSummary,
+            'from_platform': 1
+        }]
     elif ("play.google.com" in link and "https://" in link):
         resultPlayStore = scrap_google_play(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultPlayStore.get('comments')]
@@ -132,14 +133,15 @@ def search(link: str, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(new_game)
         
-        return {
-            'title': resultPlayStore.get('title'),
+        return [{
+            'game_id': 1,
+            'name': resultPlayStore.get('title'),
             'description': "From Google Play",
-            'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
-            'positiveSummary': positiveSummary,
-            'negativeSummary': negativeSummary,
-            'fromPlatform': 2
-        }
+            'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
+            'summary_positive': positiveSummary,
+            'summary_negative': negativeSummary,
+            'from_platform': 2
+        }]
     elif ("store.steampowered.com" in link and "https://" in link):
         resultSteam = scrap_steam(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultSteam.get('comments')]
@@ -182,14 +184,17 @@ def search(link: str, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(new_game)
         
-        return {
-            'title': resultSteam.get('title'),
-            'description': "From Steam",
-            'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
-            'summary_positive': positiveSummary,
-            'summary_negative': negativeSummary,
-            'from_platform': 3
-        }
+        return [
+            {
+                'game_id': 1,
+                'name': resultSteam.get('title'),
+                'description': "From Steam",
+                'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
+                'summary_positive': positiveSummary,
+                'summary_negative': negativeSummary,
+                'from_platform': 3
+            }
+        ]
     else:
         games = db.query(Game).filter(Game.name.ilike(f"%{link}%")).all()
         
