@@ -13,6 +13,16 @@ router = APIRouter(prefix="/games", tags=["games"])
 
 Base.metadata.create_all(bind=engine)
 
+model_dir = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../app/ai_models/steam_review_model")
+)
+
+print("Loading sentiment model...")
+sentiment_model = pipeline("text-classification", model=model_dir, tokenizer="distilbert-base-uncased", device=0)
+
+print("Loading summarization model...")
+summarization_pipeline = pipeline("summarization", model="facebook/bart-large-cnn", device=0)
+
 @router.get("/")
 def get_all_games(db: Session = Depends(get_db)):
     games = db.query(Game).all()
@@ -20,17 +30,6 @@ def get_all_games(db: Session = Depends(get_db)):
 
 @router.get("/search")
 def search(link: str, db: Session = Depends(get_db)):
-    model_dir = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "../../app/ai_models/steam_review_model")
-    )
-    
-    if ("https://" in link):
-        # add sentiment model
-        sentiment_model = pipeline("text-classification", model=model_dir, tokenizer="distilbert-base-uncased", device=0)
-
-        # pipeline for summarization
-        summarization_pipeline = pipeline("summarization", model="facebook/bart-large-cnn", device=0)
-    
     # if statement to check url and call the right scrapping function
     if ("itch.io" in link and "https://" in link):
         resultItchio = scrap_itchio(link)
@@ -44,10 +43,11 @@ def search(link: str, db: Session = Depends(get_db)):
         positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=100, min_length=10, do_sample=False)
         negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=100, min_length=10, do_sample=False)
         
-        new_game = Game(name=resultItchio.get('title'), description="From Itch.io", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=1)
-        db.add(new_game)
-        db.commit()
-        db.refresh(new_game)
+        if (new_game := db.query(Game).filter(Game.name == resultItchio.get('title')).first()) is None:
+            new_game = Game(name=resultItchio.get('title'), description="From Itch.io", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=1)
+            db.add(new_game)
+            db.commit()
+            db.refresh(new_game)
         
         return {
             'title': resultItchio.get('title'),
@@ -69,10 +69,11 @@ def search(link: str, db: Session = Depends(get_db)):
         positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=400, min_length=100, do_sample=False)
         negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=400, min_length=100, do_sample=False)
         
-        new_game = Game(name=resultPlayStore.get('title'), description="From Google Play", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=2)
-        db.add(new_game)
-        db.commit()
-        db.refresh(new_game)
+        if (new_game := db.query(Game).filter(Game.name == resultPlayStore.get('title')).first()) is None:
+            new_game = Game(name=resultPlayStore.get('title'), description="From Google Play", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=2)
+            db.add(new_game)
+            db.commit()
+            db.refresh(new_game)
         
         return {
             'title': resultPlayStore.get('title'),
@@ -94,10 +95,11 @@ def search(link: str, db: Session = Depends(get_db)):
         positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=400, min_length=100, do_sample=False)
         negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=400, min_length=100, do_sample=False)
         
-        new_game = Game(name=resultSteam.get('title'), description="From Steam", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=3)
-        db.add(new_game)
-        db.commit()
-        db.refresh(new_game)
+        if (new_game := db.query(Game).filter(Game.name == resultSteam.get('title')).first()) is None:
+            new_game = Game(name=resultSteam.get('title'), description="From Steam", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=3)
+            db.add(new_game)
+            db.commit()
+            db.refresh(new_game)
         
         return {
             'title': resultSteam.get('title'),
