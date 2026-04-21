@@ -1,5 +1,5 @@
 export interface GameData {
-    game_id: string;
+    game_id?: string;
     name: string;
     description: string;
     recommendation_percent: number;
@@ -12,4 +12,4 @@ export interface GameEmptyData {
     message?: string;
 }
 
-export type GameDataResponse = GameData[] | GameEmptyData | null;
+export type GameDataResponse = GameData[] | GameEmptyData | null | undefined;
