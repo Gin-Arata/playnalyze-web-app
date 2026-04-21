@@ -12,3 +12,4 @@ class Game(Base):
     summary_positive = Column(String, index=True)
     summary_negative = Column(String, index=True)
     from_platform = Column(Integer, index=True)
+    img_url = Column(String, index=True)

@@ -8,6 +8,9 @@ from ..models.deps import get_db
 from bs4 import BeautifulSoup
 from google_play_scraper import app as playStoreAppDetail, reviews as playStoreReviews, Sort as playStoreSort
 from transformers import pipeline
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter(prefix="/games", tags=["games"])
 
@@ -69,6 +72,20 @@ def search(link: str, db: Session = Depends(get_db)):
         else:
             negativeSummary = "No negative reviews found"
         
+        # get image url from rawg api using the game title
+        img_url = None
+        try:
+            rawg_api_key = os.getenv("RAWG_APIKEY")
+            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search=NARAKA%20BLADEPOINT&page_size=1"
+            rawg_response = requests.get(rawg_url, timeout=10)
+            if rawg_response.status_code == 200:
+                rawg_data = rawg_response.json()
+                if rawg_data.get("results"):
+                    img_url = rawg_data["results"][0].get("background_image")
+        except Exception as e:
+            print(f"Error fetching image from RAWG: {str(e)}")
+        
+        # save to database if not exist
         if (new_game := db.query(Game).filter(Game.name == resultItchio.get('title')).first()) is None:
             new_game = Game(
                 name=resultItchio.get('title'), 
@@ -76,7 +93,8 @@ def search(link: str, db: Session = Depends(get_db)):
                 recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
                 summary_positive=positiveSummary,
                 summary_negative=negativeSummary,
-                from_platform=1
+                from_platform=1,
+                img_url=img_url
             )
             db.add(new_game)
             db.commit()
@@ -89,7 +107,8 @@ def search(link: str, db: Session = Depends(get_db)):
             'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
             'summary_positive': positiveSummary,
             'summary_negative': negativeSummary,
-            'from_platform': 1
+            'from_platform': 1,
+            'img_url': img_url
         }]
     elif ("play.google.com" in link and "https://" in link):
         resultPlayStore = scrap_google_play(link)
@@ -126,9 +145,31 @@ def search(link: str, db: Session = Depends(get_db)):
                 negativeSummary = negativeTopTen
         else:
             negativeSummary = "No negative reviews found"
+            
+        # get image url from rawg api using the game title
+        img_url = None
+        try:
+            rawg_api_key = os.getenv("RAWG_APIKEY")
+            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search=NARAKA%20BLADEPOINT&page_size=1"
+            rawg_response = requests.get(rawg_url, timeout=10)
+            if rawg_response.status_code == 200:
+                rawg_data = rawg_response.json()
+                if rawg_data.get("results"):
+                    img_url = rawg_data["results"][0].get("background_image")
+        except Exception as e:
+            print(f"Error fetching image from RAWG: {str(e)}")
         
+        # save to database if not exist
         if (new_game := db.query(Game).filter(Game.name == resultPlayStore.get('title')).first()) is None:
-            new_game = Game(name=resultPlayStore.get('title'), description="From Google Play", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary, summary_negative=negativeSummary, from_platform=2)
+            new_game = Game(
+                name=resultPlayStore.get('title'), 
+                description="From Google Play", 
+                recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), 
+                summary_positive=positiveSummary, 
+                summary_negative=negativeSummary, 
+                from_platform=2,
+                img_url=img_url
+            )
             db.add(new_game)
             db.commit()
             db.refresh(new_game)
@@ -140,7 +181,8 @@ def search(link: str, db: Session = Depends(get_db)):
             'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
             'summary_positive': positiveSummary,
             'summary_negative': negativeSummary,
-            'from_platform': 2
+            'from_platform': 2,
+            'img_url': img_url
         }]
     elif ("store.steampowered.com" in link and "https://" in link):
         resultSteam = scrap_steam(link)
@@ -178,8 +220,30 @@ def search(link: str, db: Session = Depends(get_db)):
         else:
             negativeSummary = "No negative reviews found"
         
+        # get image url from rawg api using the game title
+        img_url = None
+        try:
+            rawg_api_key = os.getenv("RAWG_APIKEY")
+            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search=NARAKA%20BLADEPOINT&page_size=1"
+            rawg_response = requests.get(rawg_url, timeout=10)
+            if rawg_response.status_code == 200:
+                rawg_data = rawg_response.json()
+                if rawg_data.get("results"):
+                    img_url = rawg_data["results"][0].get("background_image")
+        except Exception as e:
+            print(f"Error fetching image from RAWG: {str(e)}")
+
+        # save to database if not exist
         if (new_game := db.query(Game).filter(Game.name == resultSteam.get('title')).first()) is None:
-            new_game = Game(name=resultSteam.get('title'), description="From Steam", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary, summary_negative=negativeSummary, from_platform=3)
+            new_game = Game(
+                name=resultSteam.get('title'), 
+                description="From Steam", 
+                recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), 
+                summary_positive=positiveSummary, 
+                summary_negative=negativeSummary, 
+                from_platform=3, 
+                img_url=img_url
+            )
             db.add(new_game)
             db.commit()
             db.refresh(new_game)
@@ -192,7 +256,8 @@ def search(link: str, db: Session = Depends(get_db)):
                 'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
                 'summary_positive': positiveSummary,
                 'summary_negative': negativeSummary,
-                'from_platform': 3
+                'from_platform': 3,
+                'img_url': img_url
             }
         ]
     else:
