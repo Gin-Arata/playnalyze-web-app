@@ -47,7 +47,7 @@ const View = ({
 								type="search"
 								name="search"
 								className="form-control pe-5"
-								placeholder="Input your URL here"
+								placeholder="Input your URL/Game Name here"
 							/>
 							<i className="fa fa-search position-absolute end-0 top-50 translate-middle-y me-3 fs-6 text-muted" />
 						</form>
@@ -65,7 +65,7 @@ const View = ({
 									type="search"
 									name="search"
 									className="form-control pe-5"
-									placeholder="Input your URL here"
+									placeholder="Input your URL/Game Name here"
 									defaultValue={searchText}
 								/>
 							</form>
