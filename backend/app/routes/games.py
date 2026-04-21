@@ -37,14 +37,47 @@ def search(link: str, db: Session = Depends(get_db)):
         positiveReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_1"]
         negativeReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_0"]
         
-        # summarize 10 reviews per category
-        positiveTopTen = " ".join(positiveReviews[:10])
-        negativeTopTen = " ".join(negativeReviews[:10])
-        positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=100, min_length=10, do_sample=False)
-        negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=100, min_length=10, do_sample=False)
+        # PENTING: Validasi sebelum summarization
+        positiveSummary = None
+        negativeSummary = None
+        
+        if positiveReviews:  # Cek apakah ada positive reviews
+            positiveTopTen = " ".join(positiveReviews[:10])
+            if len(positiveTopTen) > 50:  # Minimum 50 karakter
+                try:
+                    positiveSummary = summarization_pipeline(positiveTopTen[:1000], max_length=100, min_length=10, do_sample=False)
+                    positiveSummary = positiveSummary[0]['summary_text']
+                except Exception as e:
+                    print(f"Error summarizing positive: {str(e)}")
+                    positiveSummary = positiveTopTen[:100]  # Fallback ke text original (potong)
+            else:
+                positiveSummary = positiveTopTen
+        else:
+            positiveSummary = "No positive reviews found"
+        
+        if negativeReviews:  # Cek apakah ada negative reviews
+            negativeTopTen = " ".join(negativeReviews[:10])
+            if len(negativeTopTen) > 50:  # Minimum 50 karakter
+                try:
+                    negativeSummary = summarization_pipeline(negativeTopTen[:1000], max_length=100, min_length=10, do_sample=False)
+                    negativeSummary = negativeSummary[0]['summary_text']
+                except Exception as e:
+                    print(f"Error summarizing negative: {str(e)}")
+                    negativeSummary = negativeTopTen[:100]  # Fallback
+            else:
+                negativeSummary = negativeTopTen
+        else:
+            negativeSummary = "No negative reviews found"
         
         if (new_game := db.query(Game).filter(Game.name == resultItchio.get('title')).first()) is None:
-            new_game = Game(name=resultItchio.get('title'), description="From Itch.io", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=1)
+            new_game = Game(
+                name=resultItchio.get('title'), 
+                description="From Itch.io", 
+                recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
+                summary_positive=positiveSummary,
+                summary_negative=negativeSummary,
+                from_platform=1
+            )
             db.add(new_game)
             db.commit()
             db.refresh(new_game)
@@ -52,7 +85,7 @@ def search(link: str, db: Session = Depends(get_db)):
         return {
             'title': resultItchio.get('title'),
             'description': "From Itch.io",
-            'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
+            'percentageRecommendation': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
             'positiveSummary': positiveSummary,
             'negativeSummary': negativeSummary,
             'fromPlatform': 1
@@ -66,11 +99,35 @@ def search(link: str, db: Session = Depends(get_db)):
         # summarize 10 reviews per category
         positiveTopTen = " ".join(positiveReviews[:10])
         negativeTopTen = " ".join(negativeReviews[:10])
-        positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=400, min_length=100, do_sample=False)
-        negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=400, min_length=100, do_sample=False)
+        
+        if positiveReviews:
+            if len(positiveTopTen) > 50:
+                try:
+                    positiveSummary = summarization_pipeline(positiveTopTen[:1000], max_length=100, min_length=10, do_sample=False)
+                    positiveSummary = positiveSummary[0]['summary_text']
+                except Exception as e:
+                    print(f"Error summarizing positive: {str(e)}")
+                    positiveSummary = positiveTopTen[:100]
+            else:
+                positiveSummary = positiveTopTen
+        else:
+            positiveSummary = "No positive reviews found"
+        
+        if negativeReviews:
+            if len(negativeTopTen) > 50:
+                try:
+                    negativeSummary = summarization_pipeline(negativeTopTen[:1000], max_length=100, min_length=10, do_sample=False)
+                    negativeSummary = negativeSummary[0]['summary_text']
+                except Exception as e:
+                    print(f"Error summarizing negative: {str(e)}")
+                    negativeSummary = negativeTopTen[:100]
+            else:
+                negativeSummary = negativeTopTen
+        else:
+            negativeSummary = "No negative reviews found"
         
         if (new_game := db.query(Game).filter(Game.name == resultPlayStore.get('title')).first()) is None:
-            new_game = Game(name=resultPlayStore.get('title'), description="From Google Play", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=2)
+            new_game = Game(name=resultPlayStore.get('title'), description="From Google Play", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary, summary_negative=negativeSummary, from_platform=2)
             db.add(new_game)
             db.commit()
             db.refresh(new_game)
@@ -92,11 +149,35 @@ def search(link: str, db: Session = Depends(get_db)):
         # summarize 10 reviews per category
         positiveTopTen = " ".join(positiveReviews[:10])
         negativeTopTen = " ".join(negativeReviews[:10])
-        positiveSummary = summarization_pipeline(positiveTopTen[:4000], max_length=400, min_length=100, do_sample=False)
-        negativeSummary = summarization_pipeline(negativeTopTen[:4000], max_length=400, min_length=100, do_sample=False)
+        
+        if positiveReviews:
+            if len(positiveTopTen) > 50:
+                try:
+                    positiveSummary = summarization_pipeline(positiveTopTen[:1000], max_length=100, min_length=10, do_sample=False)
+                    positiveSummary = positiveSummary[0]['summary_text']
+                except Exception as e:
+                    print(f"Error summarizing positive: {str(e)}")
+                    positiveSummary = positiveTopTen[:100]
+            else:
+                positiveSummary = positiveTopTen
+        else:
+            positiveSummary = "No positive reviews found"
+            
+        if negativeReviews:
+            if len(negativeTopTen) > 50:
+                try:
+                    negativeSummary = summarization_pipeline(negativeTopTen[:1000], max_length=100, min_length=10, do_sample=False)
+                    negativeSummary = negativeSummary[0]['summary_text']
+                except Exception as e:
+                    print(f"Error summarizing negative: {str(e)}")
+                    negativeSummary = negativeTopTen[:100]
+            else:
+                negativeSummary = negativeTopTen
+        else:
+            negativeSummary = "No negative reviews found"
         
         if (new_game := db.query(Game).filter(Game.name == resultSteam.get('title')).first()) is None:
-            new_game = Game(name=resultSteam.get('title'), description="From Steam", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary[0]['summary_text'], summary_negative=negativeSummary[0]['summary_text'], from_platform=3)
+            new_game = Game(name=resultSteam.get('title'), description="From Steam", recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), summary_positive=positiveSummary, summary_negative=negativeSummary, from_platform=3)
             db.add(new_game)
             db.commit()
             db.refresh(new_game)
@@ -129,7 +210,7 @@ def predict_sentiment(text, sentiment_model):
         return result[0]['label']
     except Exception as e:
         print(f"Error predicting: {str(e)[:50]}...")
-        return "LABEL_0"  # Default ke negative jika error
+        return "LABEL_0"
 
 # Scrapping itch.io
 def scrap_itchio(link: str):

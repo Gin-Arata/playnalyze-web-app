@@ -13,6 +13,8 @@ const Index = () => {
         try {
             const query = formData.get('search') as string;
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/games/search?link=${query}`);
+
+            console.log('Game data response:', res);
             
             setData(res.data);
         } catch (error) {
