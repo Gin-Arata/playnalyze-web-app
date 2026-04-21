@@ -23,11 +23,13 @@ def search(link: str, db: Session = Depends(get_db)):
     model_dir = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "../../app/ai_models/steam_review_model")
     )
-    # add sentiment model
-    sentiment_model = pipeline("text-classification", model=model_dir, tokenizer="distilbert-base-uncased", device=0)
+    
+    if ("https://" in link):
+        # add sentiment model
+        sentiment_model = pipeline("text-classification", model=model_dir, tokenizer="distilbert-base-uncased", device=0)
 
-    # pipeline for summarization
-    summarization_pipeline = pipeline("summarization", model="facebook/bart-large-cnn", device=0)
+        # pipeline for summarization
+        summarization_pipeline = pipeline("summarization", model="facebook/bart-large-cnn", device=0)
     
     # if statement to check url and call the right scrapping function
     if ("itch.io" in link and "https://" in link):
@@ -101,6 +103,12 @@ def search(link: str, db: Session = Depends(get_db)):
         }
     else:
         games = db.query(Game).filter(Game.name.ilike(f"%{link}%")).all()
+        
+        if not games:
+            return {
+                "message": "Game not found. Please provide a valid link from Itch.io, Google Play, or Steam to analyze."
+            }
+            
         return games
     
 def predict_sentiment(text, sentiment_model):
