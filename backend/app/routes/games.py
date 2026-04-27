@@ -34,7 +34,7 @@ def get_all_games(db: Session = Depends(get_db)):
 @router.get("/search")
 def search(link: str, db: Session = Depends(get_db)):
     # if statement to check url and call the right scrapping function
-    if ("itch.io" in link and "https://" in link):
+    if ("itch.io" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
         resultItchio = scrap_itchio(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultItchio.get('comments')]
         positiveReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_1"]
@@ -72,19 +72,6 @@ def search(link: str, db: Session = Depends(get_db)):
         else:
             negativeSummary = "No negative reviews found"
         
-        # get image url from rawg api using the game title
-        img_url = None
-        try:
-            rawg_api_key = os.getenv("RAWG_APIKEY")
-            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search=NARAKA%20BLADEPOINT&page_size=1"
-            rawg_response = requests.get(rawg_url, timeout=10)
-            if rawg_response.status_code == 200:
-                rawg_data = rawg_response.json()
-                if rawg_data.get("results"):
-                    img_url = rawg_data["results"][0].get("background_image")
-        except Exception as e:
-            print(f"Error fetching image from RAWG: {str(e)}")
-        
         # save to database if not exist
         if (new_game := db.query(Game).filter(Game.name == resultItchio.get('title')).first()) is None:
             new_game = Game(
@@ -110,7 +97,7 @@ def search(link: str, db: Session = Depends(get_db)):
             'from_platform': 1,
             'img_url': img_url
         }]
-    elif ("play.google.com" in link and "https://" in link):
+    elif ("play.google.com" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
         resultPlayStore = scrap_google_play(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultPlayStore.get('comments')]
         positiveReviews = [r for r, p in zip(resultPlayStore.get('comments'), outputSentiment) if p == "LABEL_1"]
@@ -150,7 +137,7 @@ def search(link: str, db: Session = Depends(get_db)):
         img_url = None
         try:
             rawg_api_key = os.getenv("RAWG_APIKEY")
-            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search=NARAKA%20BLADEPOINT&page_size=1"
+            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search={resultPlayStore.get('title')}&page_size=1"
             rawg_response = requests.get(rawg_url, timeout=10)
             if rawg_response.status_code == 200:
                 rawg_data = rawg_response.json()
@@ -184,7 +171,7 @@ def search(link: str, db: Session = Depends(get_db)):
             'from_platform': 2,
             'img_url': img_url
         }]
-    elif ("store.steampowered.com" in link and "https://" in link):
+    elif ("store.steampowered.com" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
         resultSteam = scrap_steam(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultSteam.get('comments')]
         positiveReviews = [r for r, p in zip(resultSteam.get('comments'), outputSentiment) if p == "LABEL_1"]
@@ -224,7 +211,7 @@ def search(link: str, db: Session = Depends(get_db)):
         img_url = None
         try:
             rawg_api_key = os.getenv("RAWG_APIKEY")
-            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search=NARAKA%20BLADEPOINT&page_size=1"
+            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search={resultSteam.get('title')}&page_size=1"
             rawg_response = requests.get(rawg_url, timeout=10)
             if rawg_response.status_code == 200:
                 rawg_data = rawg_response.json()
