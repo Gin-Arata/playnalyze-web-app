@@ -114,9 +114,16 @@ const View = ({
 														<h5 className="card-title">
 															{game.name}
 														</h5>
-														<p className="card-text text-muted">
-															{game.description.slice(0, 200)}...
-														</p>
+														{window.innerWidth >
+															1200 && (
+															<p className="card-text text-muted">
+																{game.description.slice(
+																	0,
+																	200,
+																)}
+																...
+															</p>
+														)}
 														<p className="card-text">
 															<strong>
 																Recommendation:
@@ -133,7 +140,11 @@ const View = ({
 															style={{
 																width: 'fit-content',
 															}}
-															onClick={() => setSelectedGame(game)}
+															onClick={() =>
+																setSelectedGame(
+																	game,
+																)
+															}
 														>
 															View Details
 														</button>
