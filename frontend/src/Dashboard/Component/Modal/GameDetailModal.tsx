@@ -38,7 +38,7 @@ const GameDetailModal = ({ data }: { data: GameData | null }) => {
                                     <div className="row">
                                         <div className="col-8 fw-bold">{data?.name}</div>
                                         <div className="col-4"><ButtonToMarketplace gameUrl={data?.game_url} type={data?.from_platform} /></div>
-                                        <div className="col-12 mt-2">{data?.description}</div>
+                                        <div className="col-12 mt-2">{data?.description?.slice(0, 400)}...<a href={data?.game_url} className='text-decoration-none' target="_blank" rel="noopener noreferrer">Readmore</a></div>
                                     </div>
                                 </div>
 

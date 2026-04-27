@@ -115,7 +115,7 @@ const View = ({
 															{game.name}
 														</h5>
 														<p className="card-text text-muted">
-															{game.description}
+															{game.description.slice(0, 200)}...
 														</p>
 														<p className="card-text">
 															<strong>

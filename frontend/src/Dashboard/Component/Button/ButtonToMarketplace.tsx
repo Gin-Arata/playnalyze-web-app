@@ -10,7 +10,7 @@ const ButtonToMarketplace = ({
 			<a href={gameUrl} target="_blank" rel="noopener noreferrer">
 				<img
 					className="rounded float-end"
-					src="icons/itchio-icon.jpg"
+					src="/icons/itchio-icon.png"
 					alt="itch.io"
                     width={40}
 				/>
@@ -21,7 +21,7 @@ const ButtonToMarketplace = ({
 			<a href={gameUrl} target="_blank" rel="noopener noreferrer">
 				<img
 					className="rounded float-end"
-					src="icons/playstore-icon.jpg"
+					src="/icons/playstore-icon.png"
 					alt="Play Store"
                     width={40}
 				/>
@@ -33,7 +33,7 @@ const ButtonToMarketplace = ({
 				<a href={gameUrl} target="_blank" rel="noopener noreferrer">
 					<img
 						className="rounded float-end"
-						src="icons/steam-icon.jpg"
+						src="/icons/steam-icon.jpg"
 						alt="Steam"
                         width={40}
 					/>
