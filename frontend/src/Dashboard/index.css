@@ -2,3 +2,12 @@
     outline: none !important;
     box-shadow: none !important;
 }
+
+.btn-primary {
+    --bs-btn-bg: #60A5FA;
+    --bs-btn-border-color: #60A5FA;
+    --bs-btn-hover-bg: #3B82F6;
+    --bs-btn-hover-border-color: #3B82F6;
+    --bs-btn-active-bg: #2563EB;
+    --bs-btn-active-border-color: #2563EB;
+}
