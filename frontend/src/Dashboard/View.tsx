@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { type GameDataResponse, type GameData } from '../types/game';
 import './index.css';
 import GameDetailModal from './Component/Modal/GameDetailModal';
+import FAQModal from './Component/Modal/FAQModal';
 
 const View = ({
 	submitGameSearch,
@@ -29,7 +30,7 @@ const View = ({
 						Playnalyze
 					</a>
 
-					<button className="btn btn-outline-light">
+					<button className="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#faqModal">
 						<i className="fa fa-question me-1"></i>
 						FAQ
 					</button>
@@ -166,6 +167,9 @@ const View = ({
 
 			{/* Modal Game Detail */}
 			<GameDetailModal data={selectedGame} />
+
+			{/* FAQ Modal */}
+			<FAQModal />
 		</div>
 	);
 };
