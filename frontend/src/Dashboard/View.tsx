@@ -1,6 +1,7 @@
-import React from 'react';
-import type { GameDataResponse } from '../types/game';
+import React, { useState } from 'react';
+import { type GameDataResponse, type GameData } from '../types/game';
 import './index.css';
+import GameDetailModal from './Component/Modal/GameDetailModal';
 
 const View = ({
 	submitGameSearch,
@@ -13,6 +14,8 @@ const View = ({
 	isLoading: boolean;
 	searchText?: string;
 }) => {
+	const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
+
 	return (
 		<div className="d-flex flex-column min-vh-100">
 			<div className="navbar" style={{ backgroundColor: '#60A5FA' }}>
@@ -123,15 +126,17 @@ const View = ({
 															}
 															%
 														</p>
-														<a
-															href="#"
+														<button
 															className="btn btn-primary mt-auto"
+															data-bs-toggle="modal"
+															data-bs-target="#gameDetailModal"
 															style={{
 																width: 'fit-content',
 															}}
+															onClick={() => setSelectedGame(game)}
 														>
 															View Details
-														</a>
+														</button>
 													</div>
 												</div>
 											))}
@@ -147,6 +152,9 @@ const View = ({
 					</div>
 				</>
 			)}
+
+			{/* Modal Game Detail */}
+			<GameDetailModal data={selectedGame} />
 		</div>
 	);
 };
