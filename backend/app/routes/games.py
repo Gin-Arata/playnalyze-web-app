@@ -33,6 +33,11 @@ def get_all_games(db: Session = Depends(get_db)):
 
 @router.get("/search")
 def search(link: str, db: Session = Depends(get_db)):
+    # if statement to check game available on db or not, if not then check url and call the right scrapping function
+    if db.query(Game).filter(Game.game_url.ilike(f"%{link}%")).first():
+        games = db.query(Game).filter(Game.game_url.ilike(f"%{link}%")).all()
+        return games
+    
     # if statement to check url and call the right scrapping function
     if ("itch.io" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
         resultItchio = scrap_itchio(link)
@@ -81,7 +86,8 @@ def search(link: str, db: Session = Depends(get_db)):
                 summary_positive=positiveSummary,
                 summary_negative=negativeSummary,
                 from_platform=1,
-                img_url=img_url
+                img_url=img_url,
+                game_url=link
             )
             db.add(new_game)
             db.commit()
@@ -95,7 +101,8 @@ def search(link: str, db: Session = Depends(get_db)):
             'summary_positive': positiveSummary,
             'summary_negative': negativeSummary,
             'from_platform': 1,
-            'img_url': img_url
+            'img_url': img_url,
+            'game_url': link
         }]
     elif ("play.google.com" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
         resultPlayStore = scrap_google_play(link)
@@ -155,7 +162,8 @@ def search(link: str, db: Session = Depends(get_db)):
                 summary_positive=positiveSummary, 
                 summary_negative=negativeSummary, 
                 from_platform=2,
-                img_url=img_url
+                img_url=img_url,
+                game_url=link
             )
             db.add(new_game)
             db.commit()
@@ -169,7 +177,8 @@ def search(link: str, db: Session = Depends(get_db)):
             'summary_positive': positiveSummary,
             'summary_negative': negativeSummary,
             'from_platform': 2,
-            'img_url': img_url
+            'img_url': img_url,
+            'game_url': link
         }]
     elif ("store.steampowered.com" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
         resultSteam = scrap_steam(link)
@@ -229,7 +238,8 @@ def search(link: str, db: Session = Depends(get_db)):
                 summary_positive=positiveSummary, 
                 summary_negative=negativeSummary, 
                 from_platform=3, 
-                img_url=img_url
+                img_url=img_url,
+                game_url=link
             )
             db.add(new_game)
             db.commit()
@@ -244,7 +254,8 @@ def search(link: str, db: Session = Depends(get_db)):
                 'summary_positive': positiveSummary,
                 'summary_negative': negativeSummary,
                 'from_platform': 3,
-                'img_url': img_url
+                'img_url': img_url,
+                'game_url': link
             }
         ]
     else:
