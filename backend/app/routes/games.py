@@ -34,12 +34,12 @@ def get_all_games(db: Session = Depends(get_db)):
 @router.get("/search")
 def search(link: str, db: Session = Depends(get_db)):
     # if statement to check game available on db or not, if not then check url and call the right scrapping function
-    if db.query(Game).filter(Game.game_url.ilike(f"%{link}%")).first():
+    if db.query(Game).filter(Game.game_url.ilike(f"%{link}%")) is not None and "https://" in link:
         games = db.query(Game).filter(Game.game_url.ilike(f"%{link}%")).all()
         return games
     
     # if statement to check url and call the right scrapping function
-    if ("itch.io" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
+    if ("itch.io" in link and "https://" in link):
         resultItchio = scrap_itchio(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultItchio.get('comments')]
         positiveReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_1"]
@@ -104,7 +104,7 @@ def search(link: str, db: Session = Depends(get_db)):
             'img_url': img_url,
             'game_url': link
         }]
-    elif ("play.google.com" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
+    elif ("play.google.com" in link and "https://" in link):
         resultPlayStore = scrap_google_play(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultPlayStore.get('comments')]
         positiveReviews = [r for r, p in zip(resultPlayStore.get('comments'), outputSentiment) if p == "LABEL_1"]
@@ -180,7 +180,7 @@ def search(link: str, db: Session = Depends(get_db)):
             'img_url': img_url,
             'game_url': link
         }]
-    elif ("store.steampowered.com" in link and "https://" in link and db.query(Game).filter(Game.name.ilike(f"%{link}%")).first() is None):
+    elif ("store.steampowered.com" in link and "https://" in link):
         resultSteam = scrap_steam(link)
         outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultSteam.get('comments')]
         positiveReviews = [r for r, p in zip(resultSteam.get('comments'), outputSentiment) if p == "LABEL_1"]
