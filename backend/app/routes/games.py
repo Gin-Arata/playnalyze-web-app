@@ -34,9 +34,10 @@ def get_all_games(db: Session = Depends(get_db)):
 @router.get("/search")
 def search(link: str, db: Session = Depends(get_db)):
     # if statement to check game available on db or not, if not then check url and call the right scrapping function
-    if db.query(Game).filter(Game.game_url.ilike(f"%{link}%")) is not None and "https://" in link:
-        games = db.query(Game).filter(Game.game_url.ilike(f"%{link}%")).all()
-        return games
+    if "https://" in link:
+        games = db.query(Game).filter(Game.game_url == link).all()
+        if games:
+            return games
     
     # if statement to check url and call the right scrapping function
     if ("itch.io" in link and "https://" in link):
@@ -81,7 +82,7 @@ def search(link: str, db: Session = Depends(get_db)):
         if (new_game := db.query(Game).filter(Game.name == resultItchio.get('title')).first()) is None:
             new_game = Game(
                 name=resultItchio.get('title'), 
-                description="From Itch.io", 
+                description=resultItchio.get('description'), 
                 recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
                 summary_positive=positiveSummary,
                 summary_negative=negativeSummary,
@@ -96,7 +97,7 @@ def search(link: str, db: Session = Depends(get_db)):
         return [{
             'game_id': 1,
             'name': resultItchio.get('title'),
-            'description': "From Itch.io",
+            'description': resultItchio.get('description'),
             'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
             'summary_positive': positiveSummary,
             'summary_negative': negativeSummary,
@@ -157,7 +158,7 @@ def search(link: str, db: Session = Depends(get_db)):
         if (new_game := db.query(Game).filter(Game.name == resultPlayStore.get('title')).first()) is None:
             new_game = Game(
                 name=resultPlayStore.get('title'), 
-                description="From Google Play", 
+                description=resultPlayStore.get('description'),
                 recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), 
                 summary_positive=positiveSummary, 
                 summary_negative=negativeSummary, 
@@ -172,7 +173,7 @@ def search(link: str, db: Session = Depends(get_db)):
         return [{
             'game_id': 1,
             'name': resultPlayStore.get('title'),
-            'description': "From Google Play",
+            'description': resultPlayStore.get('description'),
             'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
             'summary_positive': positiveSummary,
             'summary_negative': negativeSummary,
@@ -233,7 +234,7 @@ def search(link: str, db: Session = Depends(get_db)):
         if (new_game := db.query(Game).filter(Game.name == resultSteam.get('title')).first()) is None:
             new_game = Game(
                 name=resultSteam.get('title'), 
-                description="From Steam", 
+                description=resultSteam.get('description'), 
                 recommendation_percent=((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), 
                 summary_positive=positiveSummary, 
                 summary_negative=negativeSummary, 
@@ -249,7 +250,7 @@ def search(link: str, db: Session = Depends(get_db)):
             {
                 'game_id': 1,
                 'name': resultSteam.get('title'),
-                'description': "From Steam",
+                'description': resultSteam.get('description'),
                 'recommendation_percent': ((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
                 'summary_positive': positiveSummary,
                 'summary_negative': negativeSummary,
@@ -289,12 +290,13 @@ def scrap_itchio(link: str):
     res = requests.get(url, headers=headers)
     soup = BeautifulSoup(res.text, "html.parser")
     gameTitle = soup.find("h1", class_="game_title").text.strip()
+    gameDescription = soup.find("div", class_="formatted_description").text.strip()
     commentsPage1 = soup.find_all("div", class_="post_body")
     
     totalComments = soup.find("nobr")
     
     if (not totalComments):
-        return {"title": gameTitle, "comments": [c.text.strip() for c in commentsPage1]}
+        return {"title": gameTitle, "description": gameDescription, "comments": [c.text.strip() for c in commentsPage1]}
     else:
         textTotalComments = totalComments.text.strip()
         partsTotalComments = textTotalComments.split(" ")
@@ -305,7 +307,7 @@ def scrap_itchio(link: str):
         commentsPage2 = soup.find_all("div", class_="post_body")
         
         allComments = commentsPage1 + commentsPage2
-        return {"title": gameTitle, "comments": [c.text.strip() for c in allComments]}
+        return {"title": gameTitle, "description": gameDescription, "comments": [c.text.strip() for c in allComments]}
     
 # Scrapping Google Play
 def scrap_google_play(link: str):
@@ -315,7 +317,7 @@ def scrap_google_play(link: str):
     
     contents = [review['content'] for review in resultReview]
     
-    return {'title': resultApp.get('title'), 'comments': contents}
+    return {'title': resultApp.get('title'), 'description': resultApp.get('description'), 'comments': contents}
 
 # request api steam
 def scrap_steam(link: str):
@@ -338,8 +340,10 @@ def scrap_steam(link: str):
         
         # Get game title
         title = None
+        description = None
         if appid in details_data and details_data[appid].get("success"):
             title = details_data[appid]["data"].get("name", "Unknown")
+            description = details_data[appid]["data"].get("short_description", "No description available")
         
         # Fetch reviews
         reviews_url = f"https://store.steampowered.com/appreviews/{appid}?json=1&day_range=365&num_per_page=100"
@@ -354,10 +358,11 @@ def scrap_steam(link: str):
         
         return {
             "title": title,
+            "description": description,
             "comments": comments
         }
     
     except Exception as e:
         print(f"Error scraping Steam: {str(e)}")
-        return {"title": None, "comments": [], "error": str(e)}
+        return {"title": None, "description": None, "comments": [], "error": str(e)}
     
