@@ -116,7 +116,29 @@ const FAQModal = () => {
 										className="accordion-collapse collapse"
 									>
 										<div className="accordion-body">
-											If the game is not found, we will display a message indicating that the game could not be found. You can try searching for a different game or check the spelling of the game name or an URL of the game.
+											If the game is not found, we will display a message indicating that the game could not be found. You can try searching for a different game or check the spelling of the game name or URL of the game.
+										</div>
+									</div>
+								</div>
+                                <div className="accordion-item">
+									<h2 className="accordion-header">
+										<button
+											className="accordion-button collapsed"
+											type="button"
+											data-bs-toggle="collapse"
+											data-bs-target="#panelsStayOpen-collapseFive"
+											aria-expanded="false"
+											aria-controls="panelsStayOpen-collapseFive"
+										>
+											What game stores do you support?
+										</button>
+									</h2>
+									<div
+										id="panelsStayOpen-collapseFive"
+										className="accordion-collapse collapse"
+									>
+										<div className="accordion-body">
+											We support games from various stores including <strong>Steam</strong>, <strong>Play Store</strong>, and <strong>itch.io</strong>.
 										</div>
 									</div>
 								</div>
