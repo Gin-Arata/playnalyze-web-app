@@ -8,7 +8,12 @@ export const useGameSearch = (query: string | null) => {
         queryFn: async () => {
             if (!query) return null
             const res = await axios.get(
-                `${import.meta.env.VITE_API_URL}/games/search?link=${query}`
+                `${import.meta.env.VITE_API_URL}/games/search?link=${query}`,
+                // {
+                //     headers: {
+                //         'ngrok-skip-browser-warning': 'true',
+                //     }
+                // }
             )
             return res.data as GameDataResponse
         },

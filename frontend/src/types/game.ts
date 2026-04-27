@@ -7,6 +7,7 @@ export interface GameData {
     summary_negative: number;
     from_platform: number;
     img_url: string;
+    game_url: string;
 }
 
 export interface GameEmptyData {
