@@ -31,243 +31,106 @@ def get_all_games(db: Session = Depends(get_db)):
     games = db.query(Game).all()
     return games
 
+def __generate_summary(reviews: list, category_name: str) -> str:
+    if not reviews:
+        return f"No {category_name} reviews found"
+        
+    top_ten = " ".join(reviews[:10])
+    if len(top_ten) > 50:
+        try:
+            summary = summarization_pipeline(top_ten[:1000], max_length=100, min_length=10, do_sample=False)
+            return summary[0]['summary_text']
+        except Exception as e:
+            print(f"Error summarizing {category_name}: {str(e)}")
+            return top_ten[:100]
+    return top_ten
+
+def __fetch_game_image(title: str):
+    try:
+        rawg_api_key = os.getenv("RAWG_APIKEY")
+        rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search={title}&page_size=1"
+        rawg_response = requests.get(rawg_url, timeout=10)
+        if rawg_response.status_code == 200:
+            rawg_data = rawg_response.json()
+            if rawg_data.get("results"):
+                return rawg_data["results"][0].get("background_image")
+    except Exception as e:
+        print(f"Error fetching image from RAWG: {str(e)}")
+    return None
+
 @router.get("/search")
 def search(link: str, db: Session = Depends(get_db)):
-    # if statement to check game available on db or not, if not then check url and call the right scrapping function
+    # Check if game is already in db by URL
     if "https://" in link:
         games = db.query(Game).filter(Game.game_url == link).all()
         if games:
             return games
     
-    # if statement to check url and call the right scrapping function
-    if ("itch.io" in link and "https://" in link):
-        resultItchio = scrap_itchio(link)
-        outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultItchio.get('comments')]
-        positiveReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_1"]
-        negativeReviews = [r for r, p in zip(resultItchio.get('comments'), outputSentiment) if p == "LABEL_0"]
-        
-        # PENTING: Validasi sebelum summarization
-        positiveSummary = None
-        negativeSummary = None
-        
-        if positiveReviews:  # Cek apakah ada positive reviews
-            positiveTopTen = " ".join(positiveReviews[:10])
-            if len(positiveTopTen) > 50:  # Minimum 50 karakter
-                try:
-                    positiveSummary = summarization_pipeline(positiveTopTen[:1000], max_length=100, min_length=10, do_sample=False)
-                    positiveSummary = positiveSummary[0]['summary_text']
-                except Exception as e:
-                    print(f"Error summarizing positive: {str(e)}")
-                    positiveSummary = positiveTopTen[:100]  # Fallback ke text original (potong)
-            else:
-                positiveSummary = positiveTopTen
-        else:
-            positiveSummary = "No positive reviews found"
-        
-        if negativeReviews:  # Cek apakah ada negative reviews
-            negativeTopTen = " ".join(negativeReviews[:10])
-            if len(negativeTopTen) > 50:  # Minimum 50 karakter
-                try:
-                    negativeSummary = summarization_pipeline(negativeTopTen[:1000], max_length=100, min_length=10, do_sample=False)
-                    negativeSummary = negativeSummary[0]['summary_text']
-                except Exception as e:
-                    print(f"Error summarizing negative: {str(e)}")
-                    negativeSummary = negativeTopTen[:100]  # Fallback
-            else:
-                negativeSummary = negativeTopTen
-        else:
-            negativeSummary = "No negative reviews found"
-        
-        # save to database if not exist
-        if (new_game := db.query(Game).filter(Game.name == resultItchio.get('title')).first()) is None:
-            new_game = Game(
-                name=resultItchio.get('title'), 
-                description=resultItchio.get('description'), 
-                recommendation_percent=round((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
-                summary_positive=positiveSummary,
-                summary_negative=negativeSummary,
-                from_platform=1,
-                img_url=img_url,
-                game_url=link
-            )
-            db.add(new_game)
-            db.commit()
-            db.refresh(new_game)
-        
-        return [{
-            'game_id': 1,
-            'name': resultItchio.get('title'),
-            'description': resultItchio.get('description'),
-            'recommendation_percent': round((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
-            'summary_positive': positiveSummary,
-            'summary_negative': negativeSummary,
-            'from_platform': 1,
-            'img_url': img_url,
-            'game_url': link
-        }]
-    elif ("play.google.com" in link and "https://" in link):
-        resultPlayStore = scrap_google_play(link)
-        outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultPlayStore.get('comments')]
-        positiveReviews = [r for r, p in zip(resultPlayStore.get('comments'), outputSentiment) if p == "LABEL_1"]
-        negativeReviews = [r for r, p in zip(resultPlayStore.get('comments'), outputSentiment) if p == "LABEL_0"]
-        
-        # summarize 10 reviews per category
-        positiveTopTen = " ".join(positiveReviews[:10])
-        negativeTopTen = " ".join(negativeReviews[:10])
-        
-        if positiveReviews:
-            if len(positiveTopTen) > 50:
-                try:
-                    positiveSummary = summarization_pipeline(positiveTopTen[:1000], max_length=100, min_length=10, do_sample=False)
-                    positiveSummary = positiveSummary[0]['summary_text']
-                except Exception as e:
-                    print(f"Error summarizing positive: {str(e)}")
-                    positiveSummary = positiveTopTen[:100]
-            else:
-                positiveSummary = positiveTopTen
-        else:
-            positiveSummary = "No positive reviews found"
-        
-        if negativeReviews:
-            if len(negativeTopTen) > 50:
-                try:
-                    negativeSummary = summarization_pipeline(negativeTopTen[:1000], max_length=100, min_length=10, do_sample=False)
-                    negativeSummary = negativeSummary[0]['summary_text']
-                except Exception as e:
-                    print(f"Error summarizing negative: {str(e)}")
-                    negativeSummary = negativeTopTen[:100]
-            else:
-                negativeSummary = negativeTopTen
-        else:
-            negativeSummary = "No negative reviews found"
-            
-        # get image url from rawg api using the game title
-        img_url = None
-        try:
-            rawg_api_key = os.getenv("RAWG_APIKEY")
-            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search={resultPlayStore.get('title')}&page_size=1"
-            rawg_response = requests.get(rawg_url, timeout=10)
-            if rawg_response.status_code == 200:
-                rawg_data = rawg_response.json()
-                if rawg_data.get("results"):
-                    img_url = rawg_data["results"][0].get("background_image")
-        except Exception as e:
-            print(f"Error fetching image from RAWG: {str(e)}")
-        
-        # save to database if not exist
-        if (new_game := db.query(Game).filter(Game.name == resultPlayStore.get('title')).first()) is None:
-            new_game = Game(
-                name=resultPlayStore.get('title'), 
-                description=resultPlayStore.get('description'),
-                recommendation_percent=round((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100) if (len(negativeReviews) + len(positiveReviews)) > 0 else 0,
-                summary_positive=positiveSummary, 
-                summary_negative=negativeSummary, 
-                from_platform=2,
-                img_url=img_url,
-                game_url=link
-            )
-            db.add(new_game)
-            db.commit()
-            db.refresh(new_game)
-        
-        return [{
-            'game_id': 1,
-            'name': resultPlayStore.get('title'),
-            'description': resultPlayStore.get('description'),
-            'recommendation_percent': round((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
-            'summary_positive': positiveSummary,
-            'summary_negative': negativeSummary,
-            'from_platform': 2,
-            'img_url': img_url,
-            'game_url': link
-        }]
-    elif ("store.steampowered.com" in link and "https://" in link):
-        resultSteam = scrap_steam(link)
-        outputSentiment = [predict_sentiment(r, sentiment_model) for r in resultSteam.get('comments')]
-        positiveReviews = [r for r, p in zip(resultSteam.get('comments'), outputSentiment) if p == "LABEL_1"]
-        negativeReviews = [r for r, p in zip(resultSteam.get('comments'), outputSentiment) if p == "LABEL_0"]
-        
-        # summarize 10 reviews per category
-        positiveTopTen = " ".join(positiveReviews[:10])
-        negativeTopTen = " ".join(negativeReviews[:10])
-        
-        if positiveReviews:
-            if len(positiveTopTen) > 50:
-                try:
-                    positiveSummary = summarization_pipeline(positiveTopTen[:1000], max_length=100, min_length=10, do_sample=False)
-                    positiveSummary = positiveSummary[0]['summary_text']
-                except Exception as e:
-                    print(f"Error summarizing positive: {str(e)}")
-                    positiveSummary = positiveTopTen[:100]
-            else:
-                positiveSummary = positiveTopTen
-        else:
-            positiveSummary = "No positive reviews found"
-            
-        if negativeReviews:
-            if len(negativeTopTen) > 50:
-                try:
-                    negativeSummary = summarization_pipeline(negativeTopTen[:1000], max_length=100, min_length=10, do_sample=False)
-                    negativeSummary = negativeSummary[0]['summary_text']
-                except Exception as e:
-                    print(f"Error summarizing negative: {str(e)}")
-                    negativeSummary = negativeTopTen[:100]
-            else:
-                negativeSummary = negativeTopTen
-        else:
-            negativeSummary = "No negative reviews found"
-        
-        # get image url from rawg api using the game title
-        img_url = None
-        try:
-            rawg_api_key = os.getenv("RAWG_APIKEY")
-            rawg_url = f"https://api.rawg.io/api/games?key={rawg_api_key}&search={resultSteam.get('title')}&page_size=1"
-            rawg_response = requests.get(rawg_url, timeout=10)
-            if rawg_response.status_code == 200:
-                rawg_data = rawg_response.json()
-                if rawg_data.get("results"):
-                    img_url = rawg_data["results"][0].get("background_image")
-        except Exception as e:
-            print(f"Error fetching image from RAWG: {str(e)}")
-
-        # save to database if not exist
-        if (new_game := db.query(Game).filter(Game.name == resultSteam.get('title')).first()) is None:
-            new_game = Game(
-                name=resultSteam.get('title'), 
-                description=resultSteam.get('description'), 
-                recommendation_percent=round((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100), 
-                summary_positive=positiveSummary, 
-                summary_negative=negativeSummary, 
-                from_platform=3, 
-                img_url=img_url,
-                game_url=link
-            )
-            db.add(new_game)
-            db.commit()
-            db.refresh(new_game)
-        
-        return [
-            {
-                'game_id': 1,
-                'name': resultSteam.get('title'),
-                'description': resultSteam.get('description'),
-                'recommendation_percent': round((len(positiveReviews) / (len(negativeReviews) + len(positiveReviews))) * 100),
-                'summary_positive': positiveSummary,
-                'summary_negative': negativeSummary,
-                'from_platform': 3,
-                'img_url': img_url,
-                'game_url': link
-            }
-        ]
+    # Identify platform and scrape
+    platform_id = None
+    scraped_data = {}
+    
+    if "itch.io" in link and "https://" in link:
+        platform_id = 1
+        scraped_data = scrap_itchio(link)
+    elif "play.google.com" in link and "https://" in link:
+        platform_id = 2
+        scraped_data = scrap_google_play(link)
+    elif "store.steampowered.com" in link and "https://" in link:
+        platform_id = 3
+        scraped_data = scrap_steam(link)
     else:
+        # Fallback to DB search by game title
         games = db.query(Game).filter(Game.name.ilike(f"%{link}%")).all()
-        
         if not games:
-            return {
-                "message": "Game not found. Please provide a valid link from Itch.io, Google Play, or Steam to analyze."
-            }
-            
+            return {"message": "Game not found. Please provide a valid link from Itch.io, Google Play, or Steam to analyze."}
         return games
+    
+    title = scraped_data.get('title')
+    description = scraped_data.get('description')
+    comments = scraped_data.get('comments', [])
+    
+    # Process reviews sentiment
+    outputSentiment = [predict_sentiment(r, sentiment_model) for r in comments]
+    positiveReviews = [r for r, p in zip(comments, outputSentiment) if p == "LABEL_1"]
+    negativeReviews = [r for r, p in zip(comments, outputSentiment) if p == "LABEL_0"]
+    
+    positiveSummary = __generate_summary(positiveReviews, "positive")
+    negativeSummary = __generate_summary(negativeReviews, "negative")
+    
+    # Fetch image 
+    img_url = __fetch_game_image(title) if platform_id in [2, 3] else None
+        
+    total_reviews = len(positiveReviews) + len(negativeReviews)
+    recommendation_percent = round((len(positiveReviews) / total_reviews) * 100) if total_reviews > 0 else 0
+    
+    # Save to database if not exists
+    if (new_game := db.query(Game).filter(Game.name == title).first()) is None:
+        new_game = Game(
+            name=title, 
+            description=description, 
+            recommendation_percent=recommendation_percent,
+            summary_positive=positiveSummary,
+            summary_negative=negativeSummary,
+            from_platform=platform_id,
+            img_url=img_url,
+            game_url=link
+        )
+        db.add(new_game)
+        db.commit()
+        db.refresh(new_game)
+    
+    return [{
+        'game_id': 1,
+        'name': title,
+        'description': description,
+        'recommendation_percent': recommendation_percent,
+        'summary_positive': positiveSummary,
+        'summary_negative': negativeSummary,
+        'from_platform': platform_id,
+        'img_url': img_url,
+        'game_url': link
+    }]
     
 def predict_sentiment(text, sentiment_model):
     words = text.split()
