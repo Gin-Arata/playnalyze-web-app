@@ -1,5 +1,6 @@
 import requests
 import os
+import re
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from ..models.database import engine, Base
@@ -31,19 +32,60 @@ def get_all_games(db: Session = Depends(get_db)):
     games = db.query(Game).all()
     return games
 
-def __generate_summary(reviews: list, category_name: str) -> str:
-    if not reviews:
+def text_preprocessing(text: str) -> str:
+    # Case folding
+    text = text.lower()
+    
+    # Noise removal
+    text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE) # Hapus URL
+    text = re.sub(r'<.*?>', '', text) # Hapus tag HTML
+    text = re.sub(r'[^\x00-\x7f]', '', text) # Hapus karakter non-ASCII
+    text = re.sub(r'\s+', ' ', text).strip() # Menghapus spasi berlebih
+    
+    # Normalisasi
+    norm_dict = {
+        "gg": "good game", "ez": "easy", "p2w": "pay to win",
+        "ga": "tidak", "gak": "tidak", "yg": "yang", "bgt": "banget",
+        "game nya": "gamenya", "recomended": "recommended", "rekomended": "recommended",
+        "u": "you", "r": "are", "duud": "dude", "op": "overpowered",
+        "fk": "fuck", "p2p": "peer to peer", "ths": "this", "thx": "thanks",
+    }
+    
+    words = text.split()
+    normalized_words = [norm_dict.get(word, word) for word in words]
+    return " ".join(normalized_words)
+
+def clean_review_markup(text: str) -> str:
+    # Hapus template kotak centang [ ] atau ☑ agar tidak membingungkan summarizer
+    text = re.sub(r'☐|☑|---{|}|---', '', text)
+    return text[:1500]
+
+def __generate_summary(reviews_text: str, category_name: str) -> str:
+    if not reviews_text.strip():
         return f"No {category_name} reviews found"
         
-    top_ten = " ".join(reviews[:10])
-    if len(top_ten) > 50:
+    clean_text = clean_review_markup(reviews_text)
+    
+    if len(clean_text) > 100:
         try:
-            summary = summarization_pipeline(top_ten[:1000], max_length=100, min_length=10, do_sample=False)
+            summary = summarization_pipeline(clean_text, max_length=150, min_length=40, do_sample=False)
             return summary[0]['summary_text']
         except Exception as e:
             print(f"Error summarizing {category_name}: {str(e)}")
-            return top_ten[:100]
-    return top_ten
+            return clean_text[:150]
+    return f"Ulasan {category_name} terlalu pendek."
+
+def predict_sentiment_with_score(text: str, max_length=512):
+    words = text.split()
+    if len(words) > max_length:
+        text = " ".join(words[:max_length])
+    
+    try:
+        result = sentiment_model(text, truncation=True, max_length=max_length)
+        return result[0]['label'], result[0]['score']
+    except Exception as e:
+        print(f"Error predicting: {str(e)[:50]}...")
+        return "LABEL_0", 0.0
 
 def __fetch_game_image(title: str):
     try:
@@ -91,18 +133,32 @@ def search(link: str, db: Session = Depends(get_db)):
     comments = scraped_data.get('comments', [])
     
     # Process reviews sentiment
-    outputSentiment = [predict_sentiment(r, sentiment_model) for r in comments]
-    positiveReviews = [r for r, p in zip(comments, outputSentiment) if p == "LABEL_1"]
-    negativeReviews = [r for r, p in zip(comments, outputSentiment) if p == "LABEL_0"]
+    preprocessed_reviews = [text_preprocessing(r) for r in comments]
     
-    positiveSummary = __generate_summary(positiveReviews, "positive")
-    negativeSummary = __generate_summary(negativeReviews, "negative")
+    full_predictions = []
+    for orig, prep in zip(comments, preprocessed_reviews):
+        label, score = predict_sentiment_with_score(prep)
+        full_predictions.append({'text': orig, 'label': label, 'score': score})
+    
+    # Sort reviews by confidence score
+    positive_list = sorted([p for p in full_predictions if p['label'] == "LABEL_1"], 
+                           key=lambda x: x['score'], reverse=True)
+    negative_list = sorted([p for p in full_predictions if p['label'] == "LABEL_0"], 
+                           key=lambda x: x['score'], reverse=True)
+    
+    # Gather top texts (filter out "masterpiece" for negative)
+    positive_text = " ".join([p['text'] for p in positive_list[:10]])
+    negative_text = " ".join([p['text'] for p in negative_list if 'masterpiece' not in p['text'].lower()][:10])
+    
+    # Generate Summaries
+    positiveSummary = __generate_summary(positive_text, "positive")
+    negativeSummary = __generate_summary(negative_text, "negative")
     
     # Fetch image 
     img_url = __fetch_game_image(title) if platform_id in [2, 3] else None
         
-    total_reviews = len(positiveReviews) + len(negativeReviews)
-    recommendation_percent = round((len(positiveReviews) / total_reviews) * 100) if total_reviews > 0 else 0
+    total_reviews = len(positive_list) + len(negative_list)
+    recommendation_percent = round((len(positive_list) / total_reviews) * 100) if total_reviews > 0 else 0
     
     # Save to database if not exists
     if (new_game := db.query(Game).filter(Game.name == title).first()) is None:
@@ -131,18 +187,6 @@ def search(link: str, db: Session = Depends(get_db)):
         'img_url': img_url,
         'game_url': link
     }]
-    
-def predict_sentiment(text, sentiment_model):
-    words = text.split()
-    if len(words) > 512:
-        text = " ".join(words[:512])
-    
-    try:
-        result = sentiment_model(text, truncation=True, max_length=512)
-        return result[0]['label']
-    except Exception as e:
-        print(f"Error predicting: {str(e)[:50]}...")
-        return "LABEL_0"
 
 # Scrapping itch.io
 def scrap_itchio(link: str):
