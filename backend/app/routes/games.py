@@ -18,7 +18,7 @@ router = APIRouter(prefix="/games", tags=["games"])
 Base.metadata.create_all(bind=engine)
 
 model_dir = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../app/ai_models/steam_review_model")
+    os.path.join(os.path.dirname(__file__), "../../app/ai_models/steam_review_model2")
 )
 
 print("Loading sentiment model...")
