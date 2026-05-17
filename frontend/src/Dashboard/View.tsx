@@ -19,7 +19,7 @@ const View = ({
 
 	return (
 		<div className="d-flex flex-column min-vh-100">
-			<div className="navbar" style={{ backgroundColor: '#60A5FA' }}>
+			<div className="navbar" style={{ backgroundColor: '#3B82F6' }}>
 				<div className="container-fluid d-flex justify-content-between align-items-center">
 					<a
 						className="navbar-brand d-flex gap-2 align-items-center text-white"
