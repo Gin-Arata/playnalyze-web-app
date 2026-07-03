@@ -148,7 +148,7 @@ def search(link: str, db: Session = Depends(get_db)):
     
     # Gather top texts (filter out "masterpiece" for negative)
     positive_text = " ".join([p['text'] for p in positive_list[:10]])
-    negative_text = " ".join([p['text'] for p in negative_list if 'masterpiece' not in p['text'].lower()][:10])
+    negative_text = " ".join([p['text'] for p in negative_list[:10]])
     
     # Generate Summaries
     positiveSummary = __generate_summary(positive_text, "positive")
