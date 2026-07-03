@@ -1,0 +1,12 @@
+# Simpan file ini sebagai: backend/.dockerignore
+
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+.git/
+.gitignore
+.pytest_cache/
+*.egg-info/
+.cache/

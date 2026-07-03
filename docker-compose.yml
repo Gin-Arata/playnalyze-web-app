@@ -1,0 +1,34 @@
+# Simpan file ini di root repo: playnalyze-web-app/docker-compose.yml
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: playnalyze-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Cache model HuggingFace disimpan di volume agar tidak download ulang tiap restart container
+      - model_cache:/app/.cache/huggingface
+    # Batas RAM untuk backend (model DistilBERT + BART).
+    # Sesuaikan dengan RAM laptop/VPS Anda, sisakan minimal 1-2GB untuk OS & frontend.
+    mem_limit: 4g
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: playnalyze-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    mem_limit: 256m
+
+volumes:
+  model_cache:
