@@ -1,6 +1,27 @@
 # Simpan file ini di root repo: playnalyze-web-app/docker-compose.yml
 
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: playnalyze-db
+    restart: unless-stopped
+    environment:
+      # Disamakan dengan kredensial default yang sudah dipakai di kode backend (database.py)
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres   # GANTI dengan password yang lebih aman sebelum online
+      - POSTGRES_DB=playnalyze-local
+    ports:
+      - "5432:5432"
+    volumes:
+      # Data PostgreSQL disimpan permanen, tidak hilang saat container di-restart/dihapus
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+
   backend:
     build:
       context: ./backend
@@ -11,6 +32,11 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      # Host "db" merujuk ke nama service PostgreSQL di atas (bukan "localhost")
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/playnalyze-local
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       # Cache model HuggingFace disimpan di volume agar tidak download ulang tiap restart container
       - model_cache:/app/.cache/huggingface
@@ -32,3 +58,4 @@ services:
 
 volumes:
   model_cache:
+  postgres_data:

@@ -55,4 +55,4 @@ ENV PATH="/app/.venv/bin:$PATH" \
 EXPOSE 8000
 
 # --workers 1 WAJIB kalau RAM terbatas (tiap worker = duplikat model di memori)
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uv", "run", "main.py"]

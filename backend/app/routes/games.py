@@ -253,7 +253,7 @@ def scrap_steam(link: str):
             description = details_data[appid]["data"].get("short_description", "No description available")
         
         # Fetch reviews
-        reviews_url = f"https://store.steampowered.com/appreviews/{appid}?json=1&day_range=365&num_per_page=100"
+        reviews_url = f"https://store.steampowered.com/appreviews/{appid}?json=1&filter=recent&num_per_page=100"
         reviews_response = requests.get(reviews_url, headers=details_headers, timeout=10)
         reviews_data = reviews_response.json()
         
