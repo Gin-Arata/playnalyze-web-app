@@ -45,8 +45,7 @@ def text_preprocessing(text: str) -> str:
     # Normalisasi
     norm_dict = {
         "gg": "good game", "ez": "easy", "p2w": "pay to win",
-        "ga": "tidak", "gak": "tidak", "yg": "yang", "bgt": "banget",
-        "game nya": "gamenya", "recomended": "recommended", "rekomended": "recommended",
+        "recomended": "recommended", "rekomended": "recommended",
         "u": "you", "r": "are", "duud": "dude", "op": "overpowered",
         "fk": "fuck", "p2p": "peer to peer", "ths": "this", "thx": "thanks",
     }
