@@ -4,7 +4,6 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
-.env
 .git/
 .gitignore
 .pytest_cache/
