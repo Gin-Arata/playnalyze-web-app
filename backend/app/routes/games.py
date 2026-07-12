@@ -57,7 +57,7 @@ def text_preprocessing(text: str) -> str:
 def clean_review_markup(text: str) -> str:
     # Hapus template kotak centang [ ] atau ☑ agar tidak membingungkan summarizer
     text = re.sub(r'☐|☑|---{|}|---', '', text)
-    return text[:1500]
+    return text[:4000]
 
 def __generate_summary(reviews_text: str, category_name: str) -> str:
     if not reviews_text.strip():
@@ -67,12 +67,12 @@ def __generate_summary(reviews_text: str, category_name: str) -> str:
     
     if len(clean_text) > 100:
         try:
-            summary = summarization_pipeline(clean_text, max_length=150, min_length=40, do_sample=False)
+            summary = summarization_pipeline(clean_text, max_length=300, min_length=40, do_sample=False)
             return summary[0]['summary_text']
         except Exception as e:
             print(f"Error summarizing {category_name}: {str(e)}")
             return clean_text[:150]
-    return f"Ulasan {category_name} terlalu pendek."
+    return f"Reviews {category_name} is too short."
 
 def predict_sentiment_with_score(text: str, max_length=512):
     words = text.split()
