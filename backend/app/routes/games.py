@@ -1,6 +1,7 @@
 import requests
 import os
 import re
+import math
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from ..models.database import engine, Base
@@ -16,6 +17,14 @@ load_dotenv()
 router = APIRouter(prefix="/games", tags=["games"])
 
 Base.metadata.create_all(bind=engine)
+
+SLOVIN_MARGIN_OF_ERROR = 0.05
+
+def calculate_slovin_sample_size(population: int, margin_of_error: float = SLOVIN_MARGIN_OF_ERROR) -> int:
+    if population is None or population <= 0:
+        return 0
+    n = population / (1 + population * (margin_of_error ** 2))
+    return max(1, math.ceil(n))
 
 model_dir = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../app/ai_models/steam_review_model2")
@@ -208,24 +217,55 @@ def scrap_itchio(link: str):
         partsTotalComments = textTotalComments.split(" ")
         currentTotalComments = int(partsTotalComments[2]) - 1
         total = int(partsTotalComments[4])
-        res = requests.get(url + "/comments?before=" + str(total - currentTotalComments), headers=headers)
-        soup = BeautifulSoup(res.text, "html.parser")
-        commentsPage2 = soup.find_all("div", class_="post_body")
-        
-        allComments = commentsPage1 + commentsPage2
-        return {"title": gameTitle, "description": gameDescription, "comments": [c.text.strip() for c in allComments]}
+
+        sample_size = calculate_slovin_sample_size(total)
+        if sample_size == 0:
+            return {"title": gameTitle, "description": gameDescription, "comments": [c.text.strip() for c in commentsPage1]}
+
+        allComments = list(commentsPage1)
+        page_size = len(commentsPage1)
+        fetched_count = currentTotalComments
+        max_iterations = 10
+        iterations = 0
+
+        while len(allComments) < sample_size and fetched_count < total and page_size > 0 and iterations < max_iterations:
+            before = total - fetched_count
+            res = requests.get(url + "/comments?before=" + str(before), headers=headers)
+            soup = BeautifulSoup(res.text, "html.parser")
+            nextPage = soup.find_all("div", class_="post_body")
+            iterations += 1
+
+            if not nextPage:
+                break
+
+            allComments.extend(nextPage)
+            fetched_count += len(nextPage)
+
+            if len(nextPage) < page_size:
+                break
+
+        trimmed = allComments[:sample_size]
+        return {"title": gameTitle, "description": gameDescription, "comments": [c.text.strip() for c in trimmed]}
     
 # Scrapping Google Play
+@router.get("/scrap/playstore")
 def scrap_google_play(link: str):
     app_id = link.split("id=")[1]
-    resultReview, token = playStoreReviews(app_id=app_id, lang="en", country="us", sort=playStoreSort.NEWEST, count=100)
     resultApp = playStoreAppDetail(app_id=app_id, lang="en", country="us")
-    
+
+    total_reviews = resultApp.get('reviews') or 0
+    sample_size = calculate_slovin_sample_size(total_reviews)
+    if sample_size == 0:
+        sample_size = 100
+
+    resultReview, token = playStoreReviews(app_id=app_id, lang="en", country="us", sort=playStoreSort.NEWEST, count=sample_size)
+
     contents = [review['content'] for review in resultReview]
-    
+
     return {'title': resultApp.get('title'), 'description': resultApp.get('description'), 'comments': contents}
 
 # request api steam
+@router.get("/scrap/steam")
 def scrap_steam(link: str):
     try:
         # Extract appid from Steam link
@@ -251,17 +291,54 @@ def scrap_steam(link: str):
             title = details_data[appid]["data"].get("name", "Unknown")
             description = details_data[appid]["data"].get("short_description", "No description available")
         
-        # Fetch reviews
-        reviews_url = f"https://store.steampowered.com/appreviews/{appid}?json=1&filter=recent&purchase_type=all&num_per_page=100"
-        reviews_response = requests.get(reviews_url, headers=details_headers, timeout=10)
-        reviews_data = reviews_response.json()
-        
-        # Extract comments from reviews
+        # Fetch reviews with Slovin-based sample size, paginating via cursor
+        reviews_base_url = f"https://store.steampowered.com/appreviews/{appid}"
         comments = []
-        if reviews_data.get("success"):
+        cursor = "*"
+        seen_cursors = set()
+        sample_size = None
+        max_iterations = 20
+        iterations = 0
+
+        while iterations < max_iterations:
+            reviews_params = {
+                "json": 1,
+                "filter": "recent",
+                "purchase_type": "all",
+                "num_per_page": 100,
+                "cursor": cursor,
+            }
+            reviews_response = requests.get(reviews_base_url, headers=details_headers, params=reviews_params, timeout=10)
+            reviews_data = reviews_response.json()
+
+            if not reviews_data.get("success"):
+                break
+
+            if sample_size is None:
+                total_reviews = reviews_data.get("query_summary", {}).get("total_reviews", 0)
+                sample_size = calculate_slovin_sample_size(total_reviews)
+                if sample_size == 0:
+                    break
+
             reviews_list = reviews_data.get("reviews", [])
-            comments = [review.get("review", "") for review in reviews_list if review.get("review")]
-        
+            if not reviews_list:
+                break
+
+            comments.extend(review.get("review", "") for review in reviews_list if review.get("review"))
+
+            next_cursor = reviews_data.get("cursor")
+            iterations += 1
+
+            if not next_cursor or next_cursor == cursor or next_cursor in seen_cursors:
+                break
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+
+            if len(comments) >= sample_size:
+                break
+
+        comments = comments[:sample_size] if sample_size else comments
+
         return {
             "title": title,
             "description": description,
